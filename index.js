@@ -2,31 +2,18 @@ let Prism = require('node-prismjs');
 let path = require('path');
 let fs = require('hexo-fs');
 
-hexo.extend.tag.register('codeblock', (args, content) => {
-    let lang = args[0];
-    let line_number = hexo.config.prism_plugin.line_number || false;
-    let lineNumbers = line_number ? 'line-numbers' : '';
-    const startTag = `<pre class="${lineNumbers} language-${lang}"><code class="language-${lang}">`;
-    const endTag = `</code></pre>`;
-    let parsedCode = '';
+const codeblock = require('./lib/codeblock');
 
-    if (Prism.languages[lang]) {
-        parsedCode = Prism.highlight(content, Prism.languages[lang]);
-    } else {
-        parsedCode += content;
-    }
-    if (line_number) {
-        let match = parsedCode.match(/\n(?!$)/g);
-        let linesNum = match ? match.length + 1 : 1;
-        let lines = new Array(linesNum + 1);
-        lines = lines.join('<span></span>');
-        let startLine = '<span aria-hidden="true" class="line-numbers-rows">';
-        let endLine = '</span>';
-        parsedCode += startLine + lines + endLine;
-    }
+/**
+ * Code block tag
+ *
+ * Syntax:
+ *   {% codeblock [title] [lang:language] [url] [link text] [line_number:(true|false)] [highlight:(true|false)] [first_line:number] [mark:#,#-#] %}
+ *   code snippet
+ *   {% endcodeblock %}
+ */
 
-    return startTag + parsedCode + endTag;
-}, { ends: true });
+hexo.extend.tag.register('codeblock', codeblock(hexo), { ends: true });
 
 const baseDir = hexo.base_dir;
 const prismDir = path.join(baseDir, 'node_modules', 'prismjs');
@@ -34,8 +21,8 @@ const prismThemeDir = path.join(prismDir, 'themes');
 const prismjsFilePath = path.join(prismThemeDir, 'prism.js');
 
 // Plugin settings from config
-let prismThemeName = hexo.config.prism_plugin.theme || '';
-let line_number = hexo.config.prism_plugin.line_number || false;
+let prismThemeName = hexo.config.codeblock.theme || '';
+let line_number = hexo.config.codeblock.line_number || false;
 
 const prismThemeFileName = 'prism' + (prismThemeName === 'default' ? '' : `-${prismThemeName}`) + '.css';
 const prismThemeFilePath = path.join(prismThemeDir, prismThemeFileName);
@@ -54,6 +41,14 @@ hexo.extend.generator.register('prism_asset', function (locals) {
             path: 'css/prism-line-numbers.css',
             data: () => fs.createReadStream(path.join(prismDir, 'plugins/line-numbers', 'prism-line-numbers.css'))
         });
+        assets.push({
+            path: 'css/prism-line-highlight.css',
+            data: () => fs.createReadStream(path.join(prismDir, 'plugins/line-highlight', 'prism-line-highlight.css'))
+        });
+        assets.push({
+            path: 'js/prism-line-highlight.min.js',
+            data: () => fs.createReadStream(path.join(prismDir, 'plugins/line-highlight', 'prism-line-highlight.min.js'))
+        });
     }
 
     return assets;
@@ -66,7 +61,10 @@ hexo.extend.filter.register('after_render:html', function (str, data) {
     let js = '';
 
     if (line_number) {
-        css += `<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css">`;
+        css += `<link rel="stylesheet" href="/css/prism-line-numbers.css" type="text/css">
+            <link rel="stylesheet" href="/css/prism-line-highlight.css" type="text/css">
+        `;
+        js += `<script src="/js/prism-line-highlight.min.js"></script>`;
     }
 
     str = str.replace(/<\s*\/\s*head\s*>/, css + js + '</head>');
